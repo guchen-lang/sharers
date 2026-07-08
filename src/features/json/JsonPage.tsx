@@ -8,8 +8,6 @@ import CodeEditor, { CodeEditorHandle } from '../../shared/components/CodeEditor
 // Worker types
 import type { WorkerRequest, WorkerResponse } from './json.worker';
 
-const WORKER_PATH = new URL('./json.worker.ts', import.meta.url);
-
 export default function JsonPage(): JSX.Element {
   const [input, setInput] = useLocalStorage('devbox.json.lastInput', '{\n  "hello": "world"\n}');
   const [output, setOutput] = useState<string>('');
@@ -23,7 +21,10 @@ export default function JsonPage(): JSX.Element {
   const debounceTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    const w = new Worker(WORKER_PATH, { type: 'module' });
+    // Use Vite's ?worker suffix so the worker is emitted as a JS asset during build.
+    // Serving raw .ts files can cause some static hosts to return the wrong MIME type (e.g. video/mp2t for .ts),
+    // which breaks module scripts. The ?worker query forces the bundler to produce a JS worker file.
+    const w = new Worker(new URL('./json.worker.ts?worker', import.meta.url), { type: 'module' });
     workerRef.current = w;
     w.onmessage = (ev: MessageEvent<WorkerResponse>) => {
       const res = ev.data;
