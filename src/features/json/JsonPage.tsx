@@ -3,6 +3,7 @@ import { Code, UploadCloud, DownloadCloud, FileText, CheckCircle, AlertCircle, C
 
 import JsonTree from '../../shared/components/JsonTree';
 import { useLocalStorage } from '../../shared/hooks/useLocalStorage';
+import CodeEditor, { CodeEditorHandle } from '../../shared/components/CodeEditor';
 
 // Worker types
 import type { WorkerRequest, WorkerResponse } from './json.worker';
@@ -18,7 +19,7 @@ export default function JsonPage(): JSX.Element {
   const [message, setMessage] = useState<string | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const pendingId = useRef(0);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorRef = useRef<CodeEditorHandle | null>(null);
   const debounceTimer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export default function JsonPage(): JSX.Element {
         setOutput('');
         setParsed(undefined);
         setError({ message: res.error ?? 'Unknown parse error', line: res.line, column: res.column });
-        if (res.line !== undefined) scrollToLine(res.line);
+        if (res.line !== undefined && editorRef.current) editorRef.current.setSelection(res.line, res.column);
       }
     };
     return () => {
@@ -106,22 +107,6 @@ export default function JsonPage(): JSX.Element {
     postAction('parse', txt);
   };
 
-  function scrollToLine(line: number) {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const lines = ta.value.split('\n');
-    const targetIndex = Math.max(0, Math.min(line - 1, lines.length - 1));
-    let start = 0;
-    for (let i = 0; i < targetIndex; i++) start += lines[i].length + 1; // +1 for newline
-    const end = start + lines[targetIndex].length;
-    ta.focus();
-    ta.selectionStart = start;
-    ta.selectionEnd = end;
-    // scroll to selection
-    const lineHeight = 18; // approximate
-    ta.scrollTop = targetIndex * lineHeight;
-  }
-
   const canShowTree = parsed !== null && parsed !== undefined && typeof parsed === 'object';
 
   return (
@@ -140,13 +125,13 @@ export default function JsonPage(): JSX.Element {
           </div>
         </div>
 
-        <textarea
-          ref={textareaRef}
-          aria-label="JSON input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          className="flex-1 p-3 font-mono text-sm bg-slate-50 dark:bg-slate-800 border rounded h-96 md:h-[calc(100vh-220px)] focus:outline-none"
-        />
+        <div className="flex-1">
+          <CodeEditor
+            ref={editorRef}
+            value={input}
+            onChange={(v) => setInput(v)}
+          />
+        </div>
 
         <div className="mt-2 flex items-center gap-2">
           <div className="text-sm text-slate-500">Last output: {loading ? 'Processing...' : parsed ? 'OK' : '—'}</div>
