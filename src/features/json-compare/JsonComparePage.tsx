@@ -5,8 +5,7 @@ import JsonCompareTree from './JsonCompareTree';
 import { useLocalStorage } from '../../shared/hooks/useLocalStorage';
 import { DownloadCloud, Copy, ArrowDown, ArrowUp } from 'lucide-react';
 import type { CompareResponse } from './compare.worker';
-
-const WORKER_PATH = new URL('./compare.worker.ts?worker&inline', import.meta.url);
+import { buildDiffTree } from './diffUtils';
 
 export default function JsonComparePage() {
   const [left, setLeft] = useLocalStorage('devbox.json.compare.left', '{\n  "a": 1\n}');
@@ -14,7 +13,6 @@ export default function JsonComparePage() {
   const [diff, setDiff] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const workerRef = useRef<Worker | null>(null);
   const editorLeftRef = useRef<CodeEditorHandle | null>(null);
   const editorRightRef = useRef<CodeEditorHandle | null>(null);
   const idRef = useRef(0);
@@ -22,113 +20,6 @@ export default function JsonComparePage() {
   const [leftHighlights, setLeftHighlights] = useState<{ from: number; to: number }[]>([]);
   const [rightHighlights, setRightHighlights] = useState<{ from: number; to: number }[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    try {
-      console.debug('[json-compare] creating worker:', WORKER_PATH.href);
-      const w = new Worker(WORKER_PATH, { type: 'module' });
-      workerRef.current = w;
-
-      w.onmessage = (ev: MessageEvent<CompareResponse>) => {
-        setLoading(false);
-        const res = ev.data;
-        console.debug('[json-compare] worker onmessage', res);
-        if (!res) return;
-        if (res.success) {
-          setError(null);
-          setDiff(res.diff);
-          // collect highlights for both editors
-          const lh: { from: number; to: number }[] = [];
-          const rh: { from: number; to: number }[] = [];
-          collectHighlights(res.diff, left, right, lh, rh);
-          setLeftHighlights(lh);
-          setRightHighlights(rh);
-          setCurrentIndex(0);
-          // apply highlights
-          if (editorLeftRef.current) editorLeftRef.current.setHighlights(lh);
-          if (editorRightRef.current) editorRightRef.current.setHighlights(rh);
-        } else {
-          setDiff(null);
-          setError(res.error || 'Parse error');
-          setLeftHighlights([]);
-          setRightHighlights([]);
-          if (editorLeftRef.current) editorLeftRef.current.clearHighlights();
-          if (editorRightRef.current) editorRightRef.current.clearHighlights();
-        }
-      };
-
-      w.onerror = (ev) => {
-        console.error('[json-compare] worker error', ev);
-        setLoading(false);
-        setError('Worker error: ' + (ev?.message ?? 'unknown'));
-      };
-
-    } catch (err: any) {
-      console.error('[json-compare] failed to create worker', err);
-      setError('Failed to create worker: ' + (err?.message ?? String(err)));
-      setLoading(false);
-    }
-
-    return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const compare = () => {
-    const w = workerRef.current;
-    if (!w) {
-      console.warn('[json-compare] compare called but worker is not available');
-      setError('Worker not available');
-      return;
-    }
-    setLoading(true);
-    const id = String(++idRef.current);
-    try {
-      console.debug('[json-compare] posting compare request', { id, leftLen: left.length, rightLen: right.length });
-      w.postMessage({ id, leftText: left, rightText: right });
-    } catch (err: any) {
-      console.error('[json-compare] failed to post message to worker', err);
-      setLoading(false);
-      setError('Failed to start compare: ' + (err?.message ?? String(err)));
-    }
-  };
-
-  const copyDifferences = async () => {
-    if (!diff) return;
-    const changes: any[] = [];
-    function walk(node: any, path: string[]) {
-      if (!node) return;
-      if (node.status !== 'equal') {
-        changes.push({ path: path.join('.'), status: node.status, left: node.left, right: node.right });
-      }
-      if (node.children) {
-        for (const c of node.children) walk(c, [...path, String(c.key)]);
-      }
-    }
-    walk(diff, []);
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(changes, null, 2));
-    } catch (e) {
-      // ignore
-    }
-  };
-
-  const downloadDiff = () => {
-    if (!diff) return;
-    const blob = new Blob([JSON.stringify(diff, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'diff.json';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
 
   function collectHighlights(node: any, leftText: string, rightText: string, lh: any[], rh: any[]) {
     if (!node) return;
@@ -190,6 +81,70 @@ export default function JsonComparePage() {
     const lines = before.split('\n');
     return { line: lines.length, col: lines[lines.length - 1].length + 1 };
   }
+
+  const compare = () => {
+    setLoading(true);
+    const id = String(++idRef.current);
+    try {
+      const leftObj = JSON.parse(left);
+      const rightObj = JSON.parse(right);
+      const diffRes = buildDiffTree(leftObj, rightObj);
+      setDiff(diffRes);
+      // collect highlights for both editors
+      const lh: { from: number; to: number }[] = [];
+      const rh: { from: number; to: number }[] = [];
+      collectHighlights(diffRes, left, right, lh, rh);
+      setLeftHighlights(lh);
+      setRightHighlights(rh);
+      setCurrentIndex(0);
+      if (editorLeftRef.current) editorLeftRef.current.setHighlights(lh);
+      if (editorRightRef.current) editorRightRef.current.setHighlights(rh);
+      setError(null);
+    } catch (err: any) {
+      const msg = err && err.message ? String(err.message) : 'Invalid JSON';
+      setDiff(null);
+      setError(msg);
+      setLeftHighlights([]);
+      setRightHighlights([]);
+      if (editorLeftRef.current) editorLeftRef.current.clearHighlights();
+      if (editorRightRef.current) editorRightRef.current.clearHighlights();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyDifferences = async () => {
+    if (!diff) return;
+    const changes: any[] = [];
+    function walk(node: any, path: string[]) {
+      if (!node) return;
+      if (node.status !== 'equal') {
+        changes.push({ path: path.join('.'), status: node.status, left: node.left, right: node.right });
+      }
+      if (node.children) {
+        for (const c of node.children) walk(c, [...path, String(c.key)]);
+      }
+    }
+    walk(diff, []);
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(changes, null, 2));
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const downloadDiff = () => {
+    if (!diff) return;
+    const blob = new Blob([JSON.stringify(diff, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'diff.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-4">
