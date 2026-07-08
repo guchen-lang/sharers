@@ -1,6 +1,6 @@
 import type { LazyExoticComponent, ComponentType } from 'react';
 import React from 'react';
-import { FileText, List, Settings as SettingsIcon, Code } from 'lucide-react';
+import { FileText, List, Settings as SettingsIcon, Code, Clock } from 'lucide-react';
 
 export type ToolConfig = {
   id: string;
@@ -60,13 +60,13 @@ export const tools: ToolConfig[] = [
     route: '/json'
   },
   {
-    id: 'json-compare',
-    name: 'JSON Compare',
-    icon: Code,
+    id: 'timestamp',
+    name: 'Timestamp',
+    icon: Clock,
     category: 'Utilities',
-    description: 'Compare two JSON documents side-by-side and highlight differences',
-    keywords: ['json', 'compare', 'diff', 'compare json'],
-    component: React.lazy(() => import('../features/json-compare/JsonComparePage')),
-    route: '/json-compare'
+    description: 'Unix/ISO/RFC3339 conversions, timezone conversion, relative time and realtime clock',
+    keywords: ['timestamp', 'time', 'timezone', 'iso', 'unix', 'rfc3339'],
+    component: React.lazy(() => import('../features/timestamp/TimestampPage')),
+    route: '/timestamp'
   }
 ];
