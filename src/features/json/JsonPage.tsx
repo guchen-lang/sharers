@@ -24,7 +24,7 @@ export default function JsonPage(): JSX.Element {
     // Use Vite's ?worker suffix so the worker is emitted as a JS asset during build.
     // Serving raw .ts files can cause some static hosts to return the wrong MIME type (e.g. video/mp2t for .ts),
     // which breaks module scripts. The ?worker query forces the bundler to produce a JS worker file.
-    const w = new Worker(new URL('./json.worker.ts?worker', import.meta.url), { type: 'module' });
+    const w = new Worker(new URL('./json.worker.ts?worker&inline', import.meta.url), { type: 'module' });
     workerRef.current = w;
     w.onmessage = (ev: MessageEvent<WorkerResponse>) => {
       const res = ev.data;
