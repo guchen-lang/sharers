@@ -24,46 +24,77 @@ export default function JsonComparePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
-    const w = new Worker(WORKER_PATH, { type: 'module' });
-    workerRef.current = w;
-    w.onmessage = (ev: MessageEvent<CompareResponse>) => {
+    try {
+      console.debug('[json-compare] creating worker:', WORKER_PATH.href);
+      const w = new Worker(WORKER_PATH, { type: 'module' });
+      workerRef.current = w;
+
+      w.onmessage = (ev: MessageEvent<CompareResponse>) => {
+        setLoading(false);
+        const res = ev.data;
+        console.debug('[json-compare] worker onmessage', res);
+        if (!res) return;
+        if (res.success) {
+          setError(null);
+          setDiff(res.diff);
+          // collect highlights for both editors
+          const lh: { from: number; to: number }[] = [];
+          const rh: { from: number; to: number }[] = [];
+          collectHighlights(res.diff, left, right, lh, rh);
+          setLeftHighlights(lh);
+          setRightHighlights(rh);
+          setCurrentIndex(0);
+          // apply highlights
+          if (editorLeftRef.current) editorLeftRef.current.setHighlights(lh);
+          if (editorRightRef.current) editorRightRef.current.setHighlights(rh);
+        } else {
+          setDiff(null);
+          setError(res.error || 'Parse error');
+          setLeftHighlights([]);
+          setRightHighlights([]);
+          if (editorLeftRef.current) editorLeftRef.current.clearHighlights();
+          if (editorRightRef.current) editorRightRef.current.clearHighlights();
+        }
+      };
+
+      w.onerror = (ev) => {
+        console.error('[json-compare] worker error', ev);
+        setLoading(false);
+        setError('Worker error: ' + (ev?.message ?? 'unknown'));
+      };
+
+    } catch (err: any) {
+      console.error('[json-compare] failed to create worker', err);
+      setError('Failed to create worker: ' + (err?.message ?? String(err)));
       setLoading(false);
-      const res = ev.data;
-      if (!res) return;
-      if (res.success) {
-        setError(null);
-        setDiff(res.diff);
-        // collect highlights for both editors
-        const lh: { from: number; to: number }[] = [];
-        const rh: { from: number; to: number }[] = [];
-        collectHighlights(res.diff, left, right, lh, rh);
-        setLeftHighlights(lh);
-        setRightHighlights(rh);
-        setCurrentIndex(0);
-        // apply highlights
-        if (editorLeftRef.current) editorLeftRef.current.setHighlights(lh);
-        if (editorRightRef.current) editorRightRef.current.setHighlights(rh);
-      } else {
-        setDiff(null);
-        setError(res.error || 'Parse error');
-        setLeftHighlights([]);
-        setRightHighlights([]);
-        if (editorLeftRef.current) editorLeftRef.current.clearHighlights();
-        if (editorRightRef.current) editorRightRef.current.clearHighlights();
+    }
+
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
       }
     };
-    return () => {
-      w.terminate();
-      workerRef.current = null;
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const compare = () => {
     const w = workerRef.current;
-    if (!w) return;
+    if (!w) {
+      console.warn('[json-compare] compare called but worker is not available');
+      setError('Worker not available');
+      return;
+    }
     setLoading(true);
     const id = String(++idRef.current);
-    w.postMessage({ id, leftText: left, rightText: right });
+    try {
+      console.debug('[json-compare] posting compare request', { id, leftLen: left.length, rightLen: right.length });
+      w.postMessage({ id, leftText: left, rightText: right });
+    } catch (err: any) {
+      console.error('[json-compare] failed to post message to worker', err);
+      setLoading(false);
+      setError('Failed to start compare: ' + (err?.message ?? String(err)));
+    }
   };
 
   const copyDifferences = async () => {
