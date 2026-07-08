@@ -6,7 +6,7 @@ import { useLocalStorage } from '../../shared/hooks/useLocalStorage';
 import { DownloadCloud, Copy, ArrowDown, ArrowUp } from 'lucide-react';
 import type { CompareResponse } from './compare.worker';
 
-const WORKER_PATH = new URL('./compare.worker.ts?worker', import.meta.url);
+const WORKER_PATH = new URL('./compare.worker.ts?worker&inline', import.meta.url);
 
 export default function JsonComparePage() {
   const [left, setLeft] = useLocalStorage('devbox.json.compare.left', '{\n  "a": 1\n}');
