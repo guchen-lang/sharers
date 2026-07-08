@@ -1,41 +1,32 @@
 import React, { Suspense } from 'react';
-import { Routes, Route, Link } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
-import './styles/globals.css';
-
-const NotesPage = React.lazy(() => import('./features/notes/NotesPage'));
-const TodosPage = React.lazy(() => import('./features/todos/TodosPage'));
-const SettingsPage = React.lazy(() => import('./features/settings/SettingsPage'));
+import Sidebar from './shared/components/Sidebar';
+import { tools } from './tools/registry';
 
 export default function App() {
   return (
-    <div className="min-h-screen">
-      <header className="p-4 border-b">
-        <nav className="container mx-auto flex gap-4">
-          <Link to="/" className="font-semibold">
-            DevBox
-          </Link>
-          <Link to="/notes" className="text-sm text-slate-600 dark:text-slate-300">
-            Notes
-          </Link>
-          <Link to="/todos" className="text-sm text-slate-600 dark:text-slate-300">
-            Todos
-          </Link>
-          <Link to="/settings" className="text-sm text-slate-600 dark:text-slate-300">
-            Settings
-          </Link>
-        </nav>
-      </header>
-
-      <main className="container mx-auto p-4">
-        <Suspense fallback={<div>Loading...</div>}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/notes" element={<NotesPage />} />
-            <Route path="/todos" element={<TodosPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
-        </Suspense>
+    <div className="min-h-screen flex bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+      <Sidebar />
+      <main className="flex-1 p-6">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          {tools.map((t) => {
+            const Comp = t.component;
+            return (
+              <Route
+                key={t.id}
+                path={t.route}
+                element={
+                  <Suspense fallback={<div>Loading {t.name}...</div>}>
+                    <Comp />
+                  </Suspense>
+                }
+              />
+            );
+          })}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </main>
     </div>
   );
