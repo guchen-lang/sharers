@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sharer Test</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #4facfe, #00f2fe);
+            color: white;
+            text-align: center;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 40px;
+            border-radius: 12px;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 20px rgba(0,0,0,.2);
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 48px;
+        }
+
+        p {
+            font-size: 20px;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            background: white;
+            color: #0078d7;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🎉 Hello Sharer!</h1>
+        <p>If you can see this page, your deployment is working.</p>
+        <p id="time"></p>
+        <button onclick="showMessage()">Click Me</button>
+    </div>
+
+    <script>
+        document.getElementById("time").textContent =
+            "Current Time: " + new Date().toLocaleString();
+
+        function showMessage() {
+            alert("Sharer deployment is successful! 🚀");
+        }
+    </script>
+</body>
+</html>
