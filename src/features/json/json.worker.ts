@@ -1,4 +1,5 @@
-// Worker runs in a separate thread to keep UI responsive on large JSON
+import { indexToLineCol, extractPositionFromErrorMessage } from './jsonWorkerUtils';
+
 export type WorkerRequest = {
   id: string;
   action: 'format' | 'minify' | 'validate' | 'parse';
@@ -15,14 +16,6 @@ export type WorkerResponse = {
   line?: number;
   column?: number;
 };
-
-function indexToLineCol(text: string, index: number) {
-  const before = text.slice(0, index);
-  const lines = before.split('\n');
-  const line = lines.length;
-  const column = lines[lines.length - 1].length + 1; // 1-based
-  return { line, column };
-}
 
 self.onmessage = function (ev: MessageEvent<WorkerRequest>) {
   const msg = ev.data;
@@ -58,10 +51,8 @@ self.onmessage = function (ev: MessageEvent<WorkerRequest>) {
     self.postMessage({ id, success: false, error: 'Unknown action' });
   } catch (err: any) {
     const message = err && err.message ? String(err.message) : 'Invalid JSON';
-    // try to extract position
-    const m = /position (\d+)/i.exec(message) || /at position (\d+)/i.exec(message);
-    let position: number | undefined;
-    if (m && m[1]) position = parseInt(m[1], 10);
+    // try to extract position using helper
+    let position = extractPositionFromErrorMessage(message);
     let line: number | undefined;
     let column: number | undefined;
     if (typeof position === 'number' && !Number.isNaN(position)) {

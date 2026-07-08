@@ -1,27 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Code, UploadCloud, DownloadCloud, FileText, CheckCircle, AlertCircle, Copy } from 'lucide-react';
-import { tools } from '../../tools/registry';
 
 import JsonTree from '../../shared/components/JsonTree';
 import { useLocalStorage } from '../../shared/hooks/useLocalStorage';
 
-// Worker type
-type WorkerRequest = {
-  id: string;
-  action: 'format' | 'minify' | 'validate' | 'parse';
-  text: string;
-};
-
-type WorkerResponse = {
-  id: string;
-  success: boolean;
-  result?: string;
-  parsed?: any;
-  error?: string;
-  position?: number;
-  line?: number;
-  column?: number;
-};
+// Worker types
+import type { WorkerRequest, WorkerResponse } from './json.worker';
 
 const WORKER_PATH = new URL('./json.worker.ts', import.meta.url);
 
@@ -31,9 +15,11 @@ export default function JsonPage(): JSX.Element {
   const [error, setError] = useState<{ message: string; line?: number; column?: number } | null>(null);
   const [parsed, setParsed] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'format' | 'minify' | 'validate' | 'parse'>('format');
+  const [message, setMessage] = useState<string | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const pendingId = useRef(0);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const debounceTimer = useRef<number | null>(null);
 
   useEffect(() => {
     const w = new Worker(WORKER_PATH, { type: 'module' });
@@ -41,16 +27,18 @@ export default function JsonPage(): JSX.Element {
     w.onmessage = (ev: MessageEvent<WorkerResponse>) => {
       const res = ev.data;
       if (!res) return;
-      // Only handle latest
       setLoading(false);
       if (res.success) {
         setError(null);
         if (res.result !== undefined) setOutput(res.result);
         if (res.parsed !== undefined) setParsed(res.parsed);
+        setMessage('OK');
+        window.setTimeout(() => setMessage(null), 1200);
       } else {
         setOutput('');
         setParsed(undefined);
         setError({ message: res.error ?? 'Unknown parse error', line: res.line, column: res.column });
+        if (res.line !== undefined) scrollToLine(res.line);
       }
     };
     return () => {
@@ -68,10 +56,16 @@ export default function JsonPage(): JSX.Element {
   };
 
   useEffect(() => {
-    // auto-run format on mount
-    postAction('parse');
+    // debounced auto-validate on input change
+    if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
+    debounceTimer.current = window.setTimeout(() => {
+      postAction('validate');
+    }, 800) as unknown as number;
+    return () => {
+      if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [input]);
 
   const handleFormat = () => postAction('format');
   const handleMinify = () => postAction('minify');
@@ -81,9 +75,11 @@ export default function JsonPage(): JSX.Element {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(output || input);
-      alert('Copied to clipboard');
+      setMessage('Copied');
+      window.setTimeout(() => setMessage(null), 1200);
     } catch (e) {
-      alert('Copy failed');
+      setMessage('Copy failed');
+      window.setTimeout(() => setMessage(null), 1200);
     }
   };
 
@@ -110,6 +106,22 @@ export default function JsonPage(): JSX.Element {
     postAction('parse', txt);
   };
 
+  function scrollToLine(line: number) {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const lines = ta.value.split('\n');
+    const targetIndex = Math.max(0, Math.min(line - 1, lines.length - 1));
+    let start = 0;
+    for (let i = 0; i < targetIndex; i++) start += lines[i].length + 1; // +1 for newline
+    const end = start + lines[targetIndex].length;
+    ta.focus();
+    ta.selectionStart = start;
+    ta.selectionEnd = end;
+    // scroll to selection
+    const lineHeight = 18; // approximate
+    ta.scrollTop = targetIndex * lineHeight;
+  }
+
   const canShowTree = parsed !== null && parsed !== undefined && typeof parsed === 'object';
 
   return (
@@ -129,6 +141,7 @@ export default function JsonPage(): JSX.Element {
         </div>
 
         <textarea
+          ref={textareaRef}
           aria-label="JSON input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -137,6 +150,7 @@ export default function JsonPage(): JSX.Element {
 
         <div className="mt-2 flex items-center gap-2">
           <div className="text-sm text-slate-500">Last output: {loading ? 'Processing...' : parsed ? 'OK' : '—'}</div>
+          {message && <div className="text-sm text-slate-600">{message}</div>}
           {error && (
             <div className="text-sm text-red-600 flex items-center gap-2"><AlertCircle className="w-4 h-4" />
               <div>
