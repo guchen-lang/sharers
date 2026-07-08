@@ -58,5 +58,15 @@ export const tools: ToolConfig[] = [
     keywords: ['json', 'format', 'minify', 'validate'],
     component: React.lazy(() => import('../features/json/JsonPage')),
     route: '/json'
+  },
+  {
+    id: 'json-compare',
+    name: 'JSON Compare',
+    icon: Code,
+    category: 'Utilities',
+    description: 'Compare two JSON documents side-by-side and highlight differences',
+    keywords: ['json', 'compare', 'diff', 'compare json'],
+    component: React.lazy(() => import('../features/json-compare/JsonComparePage')),
+    route: '/json-compare'
   }
 ];
