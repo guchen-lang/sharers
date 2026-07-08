@@ -2,10 +2,13 @@ import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import type { EditorView } from '@codemirror/view';
+import { EditorSelection } from '@codemirror/state';
 
 export type CodeEditorHandle = {
   setSelection: (line: number, column?: number) => void;
   focus: () => void;
+  setHighlights: (ranges: { from: number; to: number }[]) => void;
+  clearHighlights: () => void;
 };
 
 type Props = {
@@ -32,6 +35,24 @@ const CodeEditor = forwardRef<CodeEditorHandle, Props>(({ value, onChange, readO
       const view = viewRef.current;
       if (!view) return;
       view.focus();
+    },
+    setHighlights(ranges: { from: number; to: number }[]) {
+      const view = viewRef.current;
+      if (!view) return;
+      if (!ranges || ranges.length === 0) {
+        view.dispatch({ selection: { anchor: view.state.selection.main.head } });
+        return;
+      }
+      const sels = ranges.map((r) => EditorSelection.range(Math.max(0, r.from), Math.max(0, r.to)));
+      const selection = EditorSelection.create(sels);
+      view.dispatch({ selection });
+      view.focus();
+    },
+    clearHighlights() {
+      const view = viewRef.current;
+      if (!view) return;
+      const head = view.state.selection.main.head;
+      view.dispatch({ selection: { anchor: head } });
     }
   }));
 
